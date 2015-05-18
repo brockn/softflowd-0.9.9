@@ -71,11 +71,11 @@ send_netflow_v5(struct FLOW **flows, int num_flows, int nfsock, u_int16_t ifidx,
 	struct NF5_FLOW *flw = NULL;
 	int i, j, offset, num_packets, err;
 	socklen_t errsz;
-  unsigned long long total = 0ULL;
+	unsigned long long total = 0ULL;
 
 	gettimeofday(&now, NULL);
 	uptime_ms = timeval_sub_ms(&now, system_boot_time);
-  logit(LOG_INFO, "Starting to send data");
+	logit(LOG_INFO, "Starting to send data");
 	hdr = (struct NF5_HEADER *)packet;
 	for (num_packets = offset = j = i = 0; i < num_flows; i++) {
 		if (j >= NF5_MAXFLOWS - 1) {
@@ -87,8 +87,15 @@ send_netflow_v5(struct FLOW **flows, int num_flows, int nfsock, u_int16_t ifidx,
 			    &err, &errsz); /* Clear ICMP errors */
 			if (send(nfsock, packet, (size_t)offset, 0) == -1)
 				return (-1);
-      total += (unsigned long long)offset;
+			total += (unsigned long long)offset;
 			*flows_exported += j;
+			// when reading from a tcpdump, which is the use case for this repo
+			// softflowd sends data much faster than it was actually recieved in
+			// the dump file. As such this sleep ensures no data is lost when
+			// sending to a UDP server but still allows the command to proceed
+			// at a reasonable pace. This version of softflowd is not usable
+			// for real-time collection
+			usleep(10000);
 			j = 0;
 			num_packets++;
 		}
@@ -171,7 +178,7 @@ send_netflow_v5(struct FLOW **flows, int num_flows, int nfsock, u_int16_t ifidx,
 		num_packets++;
 	}
 	gettimeofday(&later, NULL);
-  logit(LOG_INFO, "Sent = %d MB in %d seconds", (total / 1024 / 1024), timeval_sub_ms(&later, &now) / 1000);
+	logit(LOG_INFO, "Sent = %d MB in %d seconds", (total / 1024 / 1024), timeval_sub_ms(&later, &now) / 1000);
 	*flows_exported += j;
 	return (num_packets);
 }
